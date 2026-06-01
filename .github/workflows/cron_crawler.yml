@@ -1,0 +1,42 @@
+name: CGV 자동 크롤링 및 슬랙 알림
+
+on:
+  schedule:
+    # 매일 한국 시간 아침 8시 (UTC 기준 전날 밤 23시)에 실행
+    - cron: '0 23 * * *'
+  workflow_dispatch: # 버튼 눌러서 즉시 실행도 가능하게 설정
+
+jobs:
+  run_bot:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: 1. 코드 가져오기
+      uses: actions/checkout@v3
+
+    - name: 2. 파이썬 설치
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: 3. 리눅스 서버에 크롬 브라우저 설치
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y google-chrome-stable
+
+    - name: 4. 파이썬 패키지 설치
+      run: |
+        pip install requests selenium webdriver-manager
+
+    - name: 5. 봇 실행 및 슬랙 전송
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      run: python cgv_alert.py
+
+    - name: 6. 오늘 수집한 영화 목록 깃허브에 다시 저장
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add loaded_movies.txt
+        git diff --quiet && git diff --staged --quiet || git commit -m "Update movie list"
+        git push
