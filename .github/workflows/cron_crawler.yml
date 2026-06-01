@@ -33,7 +33,7 @@ jobs:
         SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
       run: python cgv_alert.py
 
-- name: 6. 오늘 수집한 영화 목록 깃허브에 다시 저장
+    - name: 6. 오늘 수집한 영화 목록 깃허브에 다시 저장
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
