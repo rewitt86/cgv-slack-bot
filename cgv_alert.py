@@ -15,7 +15,6 @@ def send_slack_message_with_image(new_movies_data):
         return
 
     items = list(new_movies_data.items())
-    # 썸네일 방식이므로 한 번에 20개씩 보내도 안전합니다.
     chunk_size = 20 
     
     for i in range(0, len(items), chunk_size):
@@ -30,19 +29,17 @@ def send_slack_message_with_image(new_movies_data):
             ])
             
         for title, img_url in chunk:
-            # 1. 영화 제목 세팅
             movie_text = f"*{title}*"
             
-            # 2. 이미지 URL이 있다면 제목 밑에 [크게 보기] 링크를 달아줍니다.
             if img_url:
-                movie_text += f"\n<{(img_url)}|🔍>"
+                # 💡 [수정 1] 이모지 대신 명확한 텍스트 문구를 넣어 모바일 슬랙의 주소 노출 버그를 해결합니다.
+                movie_text += f"\n<{img_url}|🔍 포스터 크게 보기>"
                 
             movie_section = {
                 "type": "section",
                 "text": {"type": "mrkdwn", "text": movie_text}
             }
             
-            # 3. 우측 썸네일(Accessory) 디자인 유지
             if img_url:
                 movie_section["accessory"] = {
                     "type": "image",
@@ -55,9 +52,9 @@ def send_slack_message_with_image(new_movies_data):
 
         # 메시지의 제일 마지막 묶음을 전송할 때 맨 밑에 통합 예매 링크 추가
         if i + chunk_size >= len(items):
-            # CGV 앱 호출용 딥링크 체계 (아이폰, 안드로이드 공용)
-            # 만약 앱이 설치되어 있지 않다면 모바일 웹페이지로 자동 이동합니다.
-            cgv_app_link = "cgvapp://m.cgv.co.kr"
+            # 💡 [수정 2] cgvapp:// 대신 https:// 주소를 사용하여 슬랙 차단 에러를 해결합니다.
+            # 이 주소는 스마트폰에 CGV 앱이 있으면 자동으로 앱을 열어줍니다.
+            cgv_app_link = "https://m.cgv.co.kr"
             
             blocks.append({
                 "type": "section",
@@ -66,8 +63,8 @@ def send_slack_message_with_image(new_movies_data):
 
         payload = {
             "blocks": blocks,
-            "unfurl_links": False,  # 일반 텍스트 링크 자동 미리보기 방지
-            "unfurl_media": False   # 미디어(이미지) 링크 자동 확장 방지
+            "unfurl_links": False,  
+            "unfurl_media": False   
         }
         response = requests.post(SLACK_WEBHOOK_URL, json=payload)
         
