@@ -33,10 +33,16 @@ jobs:
         SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
       run: python cgv_alert.py
 
-    - name: 6. 오늘 수집한 영화 목록 깃허브에 다시 저장
+- name: 6. 오늘 수집한 영화 목록 깃허브에 다시 저장
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
-        git add loaded_movies.txt
-        git diff --quiet && git diff --staged --quiet || git commit -m "Update movie list"
-        git push
+        
+        # [수정] 파일이 실제로 존재할 때만 git add 및 commit을 진행합니다.
+        if [ -f loaded_movies.txt ]; then
+          git add loaded_movies.txt
+          git diff --quiet && git diff --staged --quiet || git commit -m "Update movie list"
+          git push
+        else
+          echo "⚠️ loaded_movies.txt 파일이 생성되지 않았습니다. 크롤링 데이터를 받지 못했을 수 있습니다."
+        fi
