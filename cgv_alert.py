@@ -10,58 +10,66 @@ SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL")
 DB_FILE = "loaded_movies.txt"
 
 def send_slack_message_with_image(new_movies_data):
-    """슬랙 '블록 키트'를 사용하여 이미지와 텍스트를 함께 전송"""
+    """슬랙 '블록 키트'를 사용하여 이미지와 텍스트를 함께 전송 (자동 분할 기능 포함)"""
     if not SLACK_WEBHOOK_URL:
         print("⚠️ 슬랙 웹훅 URL이 설정되지 않았습니다.")
         return
 
-    # 슬랙 메시지의 헤더 부분 조립
-    blocks = [
-        {
-            "type": "header",
-            "text": {
-                "type": "plain_text",
-                "text": "🎬 [CGV 신규 예매 오픈 알림]",
-                "emoji": True
-            }
-        },
-        {
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": "지금 앱이나 웹에서 아래 영화의 예매가 가능합니다! 🍿"
-            }
-        },
-        {"type": "divider"}
-    ]
-
-    # 새로 추가된 영화들을 반복하며 슬랙 블록에 추가
-    for title, img_url in new_movies_data.items():
-        movie_section = {
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": f"*{title}*\n<https://www.cgv.co.kr|👉 예매하러 가기>"
-            }
-        }
-        
-        # 포스터 이미지 주소가 존재하면 블록 우측에 이미지 부착 (accessory)
-        if img_url:
-            movie_section["accessory"] = {
-                "type": "image",
-                "image_url": img_url,
-                "alt_text": f"{title} 포스터"
-            }
-            
-        blocks.append(movie_section)
-        blocks.append({"type": "divider"})
-
-    # 조립된 블록 페이로드 전송
-    payload = {"blocks": blocks}
-    response = requests.post(SLACK_WEBHOOK_URL, json=payload)
+    # 딕셔너리의 데이터를 리스트로 변환 (쪼개기 위함)
+    items = list(new_movies_data.items())
     
-    if response.status_code != 200:
-        print(f"슬랙 전송 실패: {response.text}")
+    # 슬랙 제한(50개 블록)을 넘지 않도록 한 번에 20개 영화(약 40블록)씩만 묶습니다.
+    chunk_size = 20 
+    
+    for i in range(0, len(items), chunk_size):
+        chunk = items[i : i + chunk_size]
+        
+        blocks = []
+        
+        # 메시지의 첫 번째 덩어리일 때만 인사말 헤더를 넣습니다.
+        if i == 0:
+            blocks.extend([
+                {
+                    "type": "header",
+                    "text": {"type": "plain_text", "text": "🎬 [CGV 신규 예매 오픈 알림]", "emoji": True}
+                },
+                {
+                    "type": "section",
+                    "text": {"type": "mrkdwn", "text": "지금 앱이나 웹에서 아래 영화의 예매가 가능합니다! 🍿"}
+                },
+                {"type": "divider"}
+            ])
+            
+        # 20개씩 잘린 영화 목록을 블록에 담습니다.
+        for title, img_url in chunk:
+            movie_section = {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"*{title}*\n<https://www.cgv.co.kr|👉 예매하러 가기>"
+                }
+            }
+            if img_url:
+                movie_section["accessory"] = {
+                    "type": "image",
+                    "image_url": img_url,
+                    "alt_text": f"{title} 포스터"
+                }
+                
+            blocks.append(movie_section)
+            blocks.append({"type": "divider"})
+
+        # 조립된 블록을 슬랙으로 발사!
+        payload = {"blocks": blocks}
+        response = requests.post(SLACK_WEBHOOK_URL, json=payload)
+        
+        if response.status_code != 200:
+            print(f"슬랙 전송 실패: {response.text}")
+        else:
+            print(f"슬랙 메시지 전송 성공! ({i+1}~{i+len(chunk)}번째 영화)")
+            
+        # 여러 번 보낼 때 슬랙이 스팸으로 오해하지 않도록 1초씩 쉬어줍니다.
+        time.sleep(1)
 
 def get_current_movies():
     options = webdriver.ChromeOptions()
