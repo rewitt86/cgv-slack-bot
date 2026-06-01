@@ -35,7 +35,7 @@ def send_slack_message_with_image(new_movies_data):
             
             # 2. 이미지 URL이 있다면 제목 밑에 [크게 보기] 링크를 달아줍니다.
             if img_url:
-                movie_text += f"\n<{(img_url)}|🔍 포스터 크게 보기>"
+                movie_text += f"\n<{(img_url)}|🔍>"
                 
             movie_section = {
                 "type": "section",
@@ -64,7 +64,11 @@ def send_slack_message_with_image(new_movies_data):
                 "text": {"type": "mrkdwn", "text": f"▶️ *<{cgv_app_link}|CGV 앱 켜서 바로 예매하기>* 🎫"}
             })
 
-        payload = {"blocks": blocks}
+        payload = {
+            "blocks": blocks,
+            "unfurl_links": False,  # 일반 텍스트 링크 자동 미리보기 방지
+            "unfurl_media": False   # 미디어(이미지) 링크 자동 확장 방지
+        }
         response = requests.post(SLACK_WEBHOOK_URL, json=payload)
         
         if response.status_code != 200:
