@@ -10,44 +10,28 @@ SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL")
 DB_FILE = "loaded_movies.txt"
 
 def send_slack_message_with_image(new_movies_data):
-    """슬랙 '블록 키트'를 사용하여 이미지와 텍스트를 함께 전송 (자동 분할 기능 포함)"""
     if not SLACK_WEBHOOK_URL:
         print("⚠️ 슬랙 웹훅 URL이 설정되지 않았습니다.")
         return
 
-    # 딕셔너리의 데이터를 리스트로 변환 (쪼개기 위함)
     items = list(new_movies_data.items())
-    
-    # 슬랙 제한(50개 블록)을 넘지 않도록 한 번에 20개 영화(약 40블록)씩만 묶습니다.
     chunk_size = 20 
     
     for i in range(0, len(items), chunk_size):
         chunk = items[i : i + chunk_size]
-        
         blocks = []
         
-        # 메시지의 첫 번째 덩어리일 때만 인사말 헤더를 넣습니다.
         if i == 0:
             blocks.extend([
-                {
-                    "type": "header",
-                    "text": {"type": "plain_text", "text": "🎬 [CGV 신규 예매 오픈 알림]", "emoji": True}
-                },
-                {
-                    "type": "section",
-                    "text": {"type": "mrkdwn", "text": "지금 앱이나 웹에서 아래 영화의 예매가 가능합니다! 🍿"}
-                },
+                {"type": "header", "text": {"type": "plain_text", "text": "🎬 [CGV 신규 예매 오픈 알림]", "emoji": True}},
+                {"type": "section", "text": {"type": "mrkdwn", "text": "지금 앱이나 웹에서 아래 영화의 예매가 가능합니다! 🍿"}},
                 {"type": "divider"}
             ])
             
-        # 20개씩 잘린 영화 목록을 블록에 담습니다.
         for title, img_url in chunk:
             movie_section = {
                 "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": f"*{title}*\n<https://www.cgv.co.kr|👉 예매하러 가기>"
-                }
+                "text": {"type": "mrkdwn", "text": f"*{title}*\n<https://www.cgv.co.kr|👉 예매하러 가기>"}
             }
             if img_url:
                 movie_section["accessory"] = {
@@ -55,11 +39,9 @@ def send_slack_message_with_image(new_movies_data):
                     "image_url": img_url,
                     "alt_text": f"{title} 포스터"
                 }
-                
             blocks.append(movie_section)
             blocks.append({"type": "divider"})
 
-        # 조립된 블록을 슬랙으로 발사!
         payload = {"blocks": blocks}
         response = requests.post(SLACK_WEBHOOK_URL, json=payload)
         
@@ -68,8 +50,7 @@ def send_slack_message_with_image(new_movies_data):
         else:
             print(f"슬랙 메시지 전송 성공! ({i+1}~{i+len(chunk)}번째 영화)")
             
-        # 여러 번 보낼 때 슬랙이 스팸으로 오해하지 않도록 1초씩 쉬어줍니다.
-        time.sleep(1)
+        time.sleep(1.5) # 전송 간격을 조금 더 여유롭게 둠
 
 def get_current_movies():
     options = webdriver.ChromeOptions()
@@ -77,31 +58,38 @@ def get_current_movies():
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
     options.add_argument('--disable-gpu')
+    # 💡 [핵심 추가] 깃허브 서버의 가상 모니터 크기를 FHD로 강제 설정하여 모든 요소가 보이게 함
+    options.add_argument('--window-size=1920,1080')
     options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-    options.add_argument('--window-size=1920,1080') # 가상 브라우저 화면 크기 키우기
-    options.add_argument('--start-maximized')
 
     driver = webdriver.Chrome(options=options)
-    
-    # 기존에는 집합(set)을 썼지만, 이번엔 제목과 이미지를 같이 저장하기 위해 딕셔너리(dict) 사용
     current_movies = {}
     
     try:
         url = "https://cgv.co.kr/cnm/cgvChart/movieChart?tabParam=123"
+        print(f"[{time.strftime('%H:%M:%S')}] CGV 페이지 접속 중...")
         driver.get(url)
         
-        WebDriverWait(driver, 15).until(
+        # 💡 [핵심 추가] 깃허브 서버의 느린 속도를 감안하여 대기 시간을 20초로 증가
+        WebDriverWait(driver, 20).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, "ul, li, [class*='chart']"))
         )
+        print(f"[{time.strftime('%H:%M:%S')}] 기본 구조 로드 완료, 추가 데이터를 위해 스크롤을 진행합니다.")
+        
+        # 💡 [핵심 추가] 화면을 중간, 그리고 끝까지 2번 스크롤하여 지연된 이미지와 데이터를 강제 호출
+        driver.execute_script("window.scrollTo(0, document.body.scrollHeight/2);")
+        time.sleep(2)
+        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
         time.sleep(3)
         
         movie_cards = driver.find_elements(By.CSS_SELECTOR, "li, [class*='item'], [class*='box']")
+        print(f"[{time.strftime('%H:%M:%S')}] 총 {len(movie_cards)}개의 카드를 분석합니다.")
+        
         for card in movie_cards:
             if "예매" in card.text:
                 title_selectors = [".movie-name", ".txt-title", ".title", "strong", "h3"]
                 title = ""
                 
-                # 1. 제목 찾기
                 for selector in title_selectors:
                     elements = card.find_elements(By.CSS_SELECTOR, selector)
                     if elements:
@@ -110,14 +98,13 @@ def get_current_movies():
                             title = temp_title
                             break
                 
-                # 2. 제목이 찾아졌다면 이미지 URL 찾기
                 if title:
                     img_url = ""
                     try:
                         img_elem = card.find_element(By.CSS_SELECTOR, "img")
                         img_url = img_elem.get_attribute("src")
                     except:
-                        pass # 이미지가 없으면 빈 문자열 처리
+                        pass
                         
                     current_movies[title] = img_url
 
@@ -131,7 +118,7 @@ def get_current_movies():
 def main():
     current_dict = get_current_movies()
     if not current_dict:
-        print("❌ 수집된 영화가 없습니다.")
+        print("❌ 수집된 영화가 없습니다. 스크립트를 종료합니다.")
         return
 
     past_set = set()
@@ -139,20 +126,16 @@ def main():
         with open(DB_FILE, "r", encoding="utf-8") as f:
             past_set = set(line.strip() for line in f if line.strip())
 
-    # 어제 목록과 비교해서 새로 추가된 '영화 제목'들만 필터링
     current_titles = set(current_dict.keys())
     new_movie_titles = current_titles - past_set
 
     if new_movie_titles:
-        # 새로 추가된 영화들의 {제목: 이미지URL} 데이터만 뽑아냄
         new_movies_data = {title: current_dict[title] for title in new_movie_titles}
-        
-        print(f"새로운 영화 {len(new_movies_data)}건 발견! 슬랙으로 전송합니다.")
+        print(f"🎉 새로운 영화 {len(new_movies_data)}건 발견! 슬랙으로 전송합니다.")
         send_slack_message_with_image(new_movies_data)
     else:
-        print("새로 추가된 영화가 없습니다.")
+        print("✅ 새로 추가된 영화가 없습니다.")
 
-    # 오늘 보았던 영화 제목들을 파일에 기록 (내일 비교용)
     with open(DB_FILE, "w", encoding="utf-8") as f:
         for title in sorted(current_titles):
             f.write(f"{title}\n")
