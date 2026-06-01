@@ -15,6 +15,7 @@ def send_slack_message_with_image(new_movies_data):
         return
 
     items = list(new_movies_data.items())
+    # 썸네일 방식이므로 한 번에 20개씩 보내도 안전합니다.
     chunk_size = 20 
     
     for i in range(0, len(items), chunk_size):
@@ -24,23 +25,44 @@ def send_slack_message_with_image(new_movies_data):
         if i == 0:
             blocks.extend([
                 {"type": "header", "text": {"type": "plain_text", "text": "🎬 [CGV 신규 예매 오픈 알림]", "emoji": True}},
-                {"type": "section", "text": {"type": "mrkdwn", "text": "지금 앱이나 웹에서 아래 영화의 예매가 가능합니다! 🍿"}},
+                {"type": "section", "text": {"type": "mrkdwn", "text": "지금 앱이나 웹에서 새로운 영화들의 예매가 오픈되었습니다! 🍿"}},
                 {"type": "divider"}
             ])
             
         for title, img_url in chunk:
+            # 1. 영화 제목 세팅
+            movie_text = f"*{title}*"
+            
+            # 2. 이미지 URL이 있다면 제목 밑에 [크게 보기] 링크를 달아줍니다.
+            if img_url:
+                movie_text += f"\n<{(img_url)}|🔍 포스터 크게 보기>"
+                
             movie_section = {
                 "type": "section",
-                "text": {"type": "mrkdwn", "text": f"*{title}*\n<https://www.cgv.co.kr|👉 예매하러 가기>"}
+                "text": {"type": "mrkdwn", "text": movie_text}
             }
+            
+            # 3. 우측 썸네일(Accessory) 디자인 유지
             if img_url:
                 movie_section["accessory"] = {
                     "type": "image",
                     "image_url": img_url,
                     "alt_text": f"{title} 포스터"
                 }
+                
             blocks.append(movie_section)
             blocks.append({"type": "divider"})
+
+        # 메시지의 제일 마지막 묶음을 전송할 때 맨 밑에 통합 예매 링크 추가
+        if i + chunk_size >= len(items):
+            # CGV 앱 호출용 딥링크 체계 (아이폰, 안드로이드 공용)
+            # 만약 앱이 설치되어 있지 않다면 모바일 웹페이지로 자동 이동합니다.
+            cgv_app_link = "cgvapp://m.cgv.co.kr"
+            
+            blocks.append({
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": f"▶️ *<{cgv_app_link}|CGV 앱 켜서 바로 예매하기>* 🎫"}
+            })
 
         payload = {"blocks": blocks}
         response = requests.post(SLACK_WEBHOOK_URL, json=payload)
@@ -48,9 +70,9 @@ def send_slack_message_with_image(new_movies_data):
         if response.status_code != 200:
             print(f"슬랙 전송 실패: {response.text}")
         else:
-            print(f"슬랙 메시지 전송 성공! ({i+1}~{i+len(chunk)}번째 영화)")
+            print(f"슬랙 메시지 전송 성공! ({i+1}~{min(i+len(chunk), len(items))}번째 영화)")
             
-        time.sleep(1.5) # 전송 간격을 조금 더 여유롭게 둠
+        time.sleep(1.5)
 
 def get_current_movies():
     options = webdriver.ChromeOptions()
