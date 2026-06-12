@@ -36,7 +36,7 @@ def send_slack_message_with_image(new_movies_data):
             
             if img_url:
                 # 💡 [수정 1] 이모지 대신 명확한 텍스트 문구를 넣어 모바일 슬랙의 주소 노출 버그를 해결합니다.
-                movie_text += f"\n<{img_url}|🔍 포스터 크게 보기>"
+                movie_text += f"\n<{img_url}|🔍 크게 보기>"
                 
             movie_section = {
                 "type": "section",
